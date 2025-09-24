@@ -108,10 +108,13 @@ class _TruncatedMarkdown extends StatefulWidget {
 class _TruncatedMarkdownState extends State<_TruncatedMarkdown> {
   final ScrollController _controller = ScrollController();
   bool _overflowing = false;
+  bool _atTop = true;
+  bool _atBottom = false;
 
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverflow());
   }
 
@@ -128,7 +131,32 @@ class _TruncatedMarkdownState extends State<_TruncatedMarkdown> {
       if (isOverflowing != _overflowing) {
         setState(() => _overflowing = isOverflowing);
       }
+      _updateEdgeFlags();
     }
+  }
+
+  void _onScroll() {
+    if (!mounted || !_controller.hasClients) return;
+    _updateEdgeFlags();
+  }
+
+  void _updateEdgeFlags() {
+    final atTop = _controller.offset <= 0.5;
+    final atBottom =
+        _controller.offset >= (_controller.position.maxScrollExtent - 0.5);
+    if (atTop != _atTop || atBottom != _atBottom) {
+      setState(() {
+        _atTop = atTop;
+        _atBottom = atBottom;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onScroll);
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -137,7 +165,7 @@ class _TruncatedMarkdownState extends State<_TruncatedMarkdown> {
 
     final content = SingleChildScrollView(
       controller: _controller,
-      physics: const NeverScrollableScrollPhysics(),
+      physics: const BouncingScrollPhysics(),
       child: MarkdownBody(
         data: widget.data,
         softLineBreak: true,
@@ -163,11 +191,20 @@ class _TruncatedMarkdownState extends State<_TruncatedMarkdown> {
             _overflowing
                 ? ShaderMask(
                   shaderCallback: (rect) {
-                    return const LinearGradient(
+                    final double topFade = _atTop ? 0.0 : 0.06;
+                    final double bottomFade = _atBottom ? 0.0 : 0.10;
+                    final colors = <Color>[
+                      _atTop ? Colors.white : Colors.transparent,
+                      Colors.white,
+                      Colors.white,
+                      _atBottom ? Colors.white : Colors.transparent,
+                    ];
+                    final stops = <double>[0.0, topFade, 1.0 - bottomFade, 1.0];
+                    return LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Colors.white, Colors.white, Colors.transparent],
-                      stops: [0.0, 0.85, 1.0],
+                      colors: colors,
+                      stops: stops,
                     ).createShader(rect);
                   },
                   blendMode: BlendMode.dstIn,
