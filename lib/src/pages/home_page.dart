@@ -33,77 +33,86 @@ class _HomePageState extends State<HomePage> {
       value: notes,
       child: Consumer<NotesProvider>(
         builder: (context, state, _) {
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text('Notes'),
-              actions: [
-                if (state.hasSearch)
+          return WillPopScope(
+            onWillPop: () async {
+              if (state.hasSearch) {
+                state.setSearch('');
+                return false; // Consume back to return to home instead of closing app
+              }
+              return true;
+            },
+            child: Scaffold(
+              appBar: AppBar(
+                title: const Text('Notes'),
+                actions: [
+                  if (state.hasSearch)
+                    IconButton(
+                      icon: const Icon(Icons.home_outlined),
+                      tooltip: 'Home',
+                      onPressed: () => state.setSearch(''),
+                    ),
                   IconButton(
-                    icon: const Icon(Icons.home_outlined),
-                    tooltip: 'Home',
-                    onPressed: () => state.setSearch(''),
+                    icon: const Icon(Icons.search),
+                    onPressed: () async {
+                      final q = await showSearch<String>(
+                        context: context,
+                        delegate: _NotesSearchDelegate(initial: ''),
+                      );
+                      if (q != null) state.setSearch(q);
+                    },
                   ),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: () async {
-                    final q = await showSearch<String>(
-                      context: context,
-                      delegate: _NotesSearchDelegate(initial: ''),
-                    );
-                    if (q != null) state.setSearch(q);
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.travel_explore),
-                  tooltip: 'RAG Search',
-                  onPressed: () {
+                  IconButton(
+                    icon: const Icon(Icons.travel_explore),
+                    tooltip: 'RAG Search',
+                    onPressed: () {
+                      final np = context.read<NotesProvider>();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder:
+                              (_) => ChangeNotifierProvider.value(
+                                value: np,
+                                child: const RagSearchPage(),
+                              ),
+                        ),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    onPressed: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SettingsPage()),
+                      );
+                      await state.loadNotes();
+                    },
+                  ),
+                ],
+              ),
+              floatingActionButton: FloatingActionButton.extended(
+                onPressed: () async {
+                  final id = await state.addNoteQuick(
+                    title: 'New note',
+                    content: '',
+                  );
+                  if (!context.mounted) return;
+                  if (id != null) {
                     final np = context.read<NotesProvider>();
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder:
                             (_) => ChangeNotifierProvider.value(
                               value: np,
-                              child: const RagSearchPage(),
+                              child: NoteEditorPage(noteId: id),
                             ),
                       ),
                     );
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const SettingsPage()),
-                    );
-                    await state.loadNotes();
-                  },
-                ),
-              ],
+                  }
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Quick Add'),
+              ),
+              body: _buildBody(state),
             ),
-            floatingActionButton: FloatingActionButton.extended(
-              onPressed: () async {
-                final id = await state.addNoteQuick(
-                  title: 'New note',
-                  content: '',
-                );
-                if (!context.mounted) return;
-                if (id != null) {
-                  final np = context.read<NotesProvider>();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder:
-                          (_) => ChangeNotifierProvider.value(
-                            value: np,
-                            child: NoteEditorPage(noteId: id),
-                          ),
-                    ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Quick Add'),
-            ),
-            body: _buildBody(state),
           );
         },
       ),

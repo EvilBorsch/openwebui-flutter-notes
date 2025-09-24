@@ -179,9 +179,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   );
                   if (!mounted) return;
                   setState(() => _saving = false);
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('Saved')));
+                  Navigator.of(context).pop();
                 },
         icon: const Icon(Icons.save),
         label: Text(_saving ? 'Saving...' : 'Save'),
