@@ -59,28 +59,7 @@ class NoteCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              if (snippet.isNotEmpty)
-                MarkdownBody(
-                  data: snippet,
-                  softLineBreak: true,
-                  styleSheet: MarkdownStyleSheet.fromTheme(
-                    Theme.of(context),
-                  ).copyWith(
-                    p: Theme.of(context).textTheme.bodyMedium,
-                    h1: Theme.of(context).textTheme.titleSmall,
-                    h2: Theme.of(context).textTheme.titleSmall,
-                    h3: Theme.of(context).textTheme.titleSmall,
-                    code: Theme.of(context).textTheme.bodySmall,
-                    blockquoteDecoration: BoxDecoration(
-                      border: Border(
-                        left: BorderSide(
-                          color: Theme.of(context).dividerColor,
-                          width: 3,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              if (snippet.isNotEmpty) _TruncatedMarkdown(data: snippet),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -115,5 +94,87 @@ class NoteCard extends StatelessWidget {
     if (diff.inHours < 24) return '${diff.inHours} h ago';
     if (diff.inDays < 7) return '${diff.inDays} d ago';
     return DateFormat('y-MM-dd').format(dt);
+  }
+}
+
+class _TruncatedMarkdown extends StatefulWidget {
+  final String data;
+  const _TruncatedMarkdown({required this.data});
+
+  @override
+  State<_TruncatedMarkdown> createState() => _TruncatedMarkdownState();
+}
+
+class _TruncatedMarkdownState extends State<_TruncatedMarkdown> {
+  final ScrollController _controller = ScrollController();
+  bool _overflowing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverflow());
+  }
+
+  @override
+  void didUpdateWidget(covariant _TruncatedMarkdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverflow());
+  }
+
+  void _updateOverflow() {
+    if (!mounted) return;
+    if (_controller.hasClients) {
+      final bool isOverflowing = _controller.position.maxScrollExtent > 0.0;
+      if (isOverflowing != _overflowing) {
+        setState(() => _overflowing = isOverflowing);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final half = MediaQuery.of(context).size.height * 0.5;
+
+    final content = SingleChildScrollView(
+      controller: _controller,
+      physics: const NeverScrollableScrollPhysics(),
+      child: MarkdownBody(
+        data: widget.data,
+        softLineBreak: true,
+        styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+          p: Theme.of(context).textTheme.bodyMedium,
+          h1: Theme.of(context).textTheme.titleSmall,
+          h2: Theme.of(context).textTheme.titleSmall,
+          h3: Theme.of(context).textTheme.titleSmall,
+          code: Theme.of(context).textTheme.bodySmall,
+          blockquoteDecoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: Theme.of(context).dividerColor, width: 3),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: half),
+      child: ClipRect(
+        child:
+            _overflowing
+                ? ShaderMask(
+                  shaderCallback: (rect) {
+                    return const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.white, Colors.white, Colors.transparent],
+                      stops: [0.0, 0.85, 1.0],
+                    ).createShader(rect);
+                  },
+                  blendMode: BlendMode.dstIn,
+                  child: content,
+                )
+                : content,
+      ),
+    );
   }
 }
