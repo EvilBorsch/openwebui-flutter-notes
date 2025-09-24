@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/note.dart';
 
 class NoteCard extends StatelessWidget {
@@ -18,8 +19,6 @@ class NoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final snippet = _buildSnippet(note.contentMd);
-    final linesCount = '\n'.allMatches(snippet).length + 1;
-    final maxLines = linesCount.clamp(1, 12);
 
     return Card(
       elevation: 1,
@@ -61,11 +60,26 @@ class NoteCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               if (snippet.isNotEmpty)
-                Text(
-                  snippet,
-                  maxLines: maxLines,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                MarkdownBody(
+                  data: snippet,
+                  softLineBreak: true,
+                  styleSheet: MarkdownStyleSheet.fromTheme(
+                    Theme.of(context),
+                  ).copyWith(
+                    p: Theme.of(context).textTheme.bodyMedium,
+                    h1: Theme.of(context).textTheme.titleSmall,
+                    h2: Theme.of(context).textTheme.titleSmall,
+                    h3: Theme.of(context).textTheme.titleSmall,
+                    code: Theme.of(context).textTheme.bodySmall,
+                    blockquoteDecoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                          width: 3,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               const SizedBox(height: 10),
               Row(
@@ -90,16 +104,7 @@ class NoteCard extends StatelessWidget {
   }
 
   String _buildSnippet(String md) {
-    var text = md.trim();
-    // Strip common markdown markers for nicer preview
-    text = text.replaceAll(RegExp(r'^#+\s*', multiLine: true), '');
-    text = text.replaceAll(RegExp(r'^>\s*', multiLine: true), '');
-    text = text.replaceAll(RegExp(r'^- \[.\]\s*', multiLine: true), '');
-    text = text.replaceAll(RegExp(r'`{1,3}'), '');
-    text = text.replaceAll(RegExp(r'\*\*'), '');
-    text = text.replaceAll(RegExp(r'\*'), '');
-    text = text.replaceAll(RegExp(r'_'), '');
-    return text;
+    return md.trim();
   }
 
   String _formatWhen(DateTime dt) {

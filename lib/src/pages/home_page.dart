@@ -45,12 +45,6 @@ class _HomePageState extends State<HomePage> {
               appBar: AppBar(
                 title: const Text('Notes'),
                 actions: [
-                  if (state.hasSearch)
-                    IconButton(
-                      icon: const Icon(Icons.home_outlined),
-                      tooltip: 'Home',
-                      onPressed: () => state.setSearch(''),
-                    ),
                   IconButton(
                     icon: const Icon(Icons.search),
                     onPressed: () async {
