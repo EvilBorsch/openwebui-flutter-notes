@@ -37,6 +37,12 @@ class _HomePageState extends State<HomePage> {
             appBar: AppBar(
               title: const Text('Notes'),
               actions: [
+                if (state.hasSearch)
+                  IconButton(
+                    icon: const Icon(Icons.home_outlined),
+                    tooltip: 'Home',
+                    onPressed: () => state.setSearch(''),
+                  ),
                 IconButton(
                   icon: const Icon(Icons.search),
                   onPressed: () async {
@@ -51,8 +57,15 @@ class _HomePageState extends State<HomePage> {
                   icon: const Icon(Icons.travel_explore),
                   tooltip: 'RAG Search',
                   onPressed: () {
+                    final np = context.read<NotesProvider>();
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const RagSearchPage()),
+                      MaterialPageRoute(
+                        builder:
+                            (_) => ChangeNotifierProvider.value(
+                              value: np,
+                              child: const RagSearchPage(),
+                            ),
+                      ),
                     );
                   },
                 ),
@@ -156,6 +169,11 @@ class _NotesSearchDelegate extends SearchDelegate<String> {
   @override
   List<Widget>? buildActions(BuildContext context) {
     return [
+      IconButton(
+        onPressed: () => close(context, ''),
+        icon: const Icon(Icons.home_outlined),
+        tooltip: 'Home',
+      ),
       IconButton(onPressed: () => query = '', icon: const Icon(Icons.clear)),
     ];
   }

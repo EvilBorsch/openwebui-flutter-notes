@@ -32,6 +32,7 @@ class NotesProvider extends ChangeNotifier {
   List<NoteItem> get allNotes => _notes;
   bool get loading => _loading;
   String? get error => _error;
+  bool get hasSearch => _searchQuery.trim().isNotEmpty;
 
   List<NoteItem> _filtered() {
     final list = _notes;
@@ -156,7 +157,6 @@ class NotesProvider extends ChangeNotifier {
           ),
         );
       }
-      // Pinned first, then by updatedAt desc
       items.sort((a, b) {
         if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
         return b.updatedAt.compareTo(a.updatedAt);
@@ -192,7 +192,7 @@ class NotesProvider extends ChangeNotifier {
     );
     _notes = [local, ..._notes];
     notifyListeners();
-    _setTitleOverride(fileId, title);
+    // Do not persist the placeholder title; final title is derived from content.
     return fileId;
   }
 
@@ -211,6 +211,8 @@ class NotesProvider extends ChangeNotifier {
         );
       } catch (_) {}
     }
+    // Clear any previous title override so derived title from content takes effect
+    await _clearTitleOverride(id);
     await loadNotes();
   }
 
@@ -220,38 +222,6 @@ class NotesProvider extends ChangeNotifier {
       fileId: id,
     );
     _notes.removeWhere((n) => n.id == id);
-    notifyListeners();
-  }
-
-  Future<void> togglePin(String id) async {
-    await _ensurePins();
-    if (_pinned.contains(id)) {
-      _pinned.remove(id);
-    } else {
-      _pinned.add(id);
-    }
-    await _persistPins();
-    // update current list flags and order
-    _notes =
-        _notes
-            .map(
-              (n) =>
-                  n.id == id
-                      ? NoteItem(
-                        id: n.id,
-                        title: n.title,
-                        contentMd: n.contentMd,
-                        updatedAt: n.updatedAt,
-                        createdAt: n.createdAt,
-                        pinned: _pinned.contains(id),
-                      )
-                      : n,
-            )
-            .toList();
-    _notes.sort((a, b) {
-      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-      return b.updatedAt.compareTo(a.updatedAt);
-    });
     notifyListeners();
   }
 
@@ -277,6 +247,16 @@ class NotesProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
+  Future<void> _clearTitleOverride(String id) async {
+    await _ensureTitleOverrides();
+    if (_titleOverrides.remove(id) != null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('note_titles', jsonEncode(_titleOverrides));
+      } catch (_) {}
+    }
+  }
+
   Future<void> _ensurePins() async {
     if (_pinsLoaded) return;
     try {
@@ -295,5 +275,36 @@ class NotesProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('note_pins', jsonEncode(_pinned.toList()));
     } catch (_) {}
+  }
+
+  Future<void> togglePin(String id) async {
+    await _ensurePins();
+    if (_pinned.contains(id)) {
+      _pinned.remove(id);
+    } else {
+      _pinned.add(id);
+    }
+    await _persistPins();
+    _notes =
+        _notes
+            .map(
+              (n) =>
+                  n.id == id
+                      ? NoteItem(
+                        id: n.id,
+                        title: n.title,
+                        contentMd: n.contentMd,
+                        updatedAt: n.updatedAt,
+                        createdAt: n.createdAt,
+                        pinned: _pinned.contains(id),
+                      )
+                      : n,
+            )
+            .toList();
+    _notes.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+    notifyListeners();
   }
 }

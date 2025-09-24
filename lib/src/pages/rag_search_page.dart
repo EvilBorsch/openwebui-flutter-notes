@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
 import '../services/api_client.dart';
 import '../services/rag_service.dart';
 import '../services/chat_service.dart';
+import '../providers/notes_provider.dart';
+import 'note_editor_page.dart';
 
 class RagSearchPage extends StatefulWidget {
   const RagSearchPage({super.key});
@@ -19,6 +22,7 @@ class _RagSearchPageState extends State<RagSearchPage> {
   List<_RagItem> _items = [];
   String? _llm;
   String? _llmAnswer;
+  List<_CitationRef> _citations = [];
 
   Future<void> _search() async {
     final query = _controller.text.trim();
@@ -48,6 +52,7 @@ class _RagSearchPageState extends State<RagSearchPage> {
           _RagItem(
             text: (docs[i] ?? '').toString(),
             name: md?['name']?.toString() ?? (md?['source']?.toString() ?? ''),
+            fileId: md?['file_id']?.toString(),
             score: dist,
           ),
         );
@@ -87,9 +92,61 @@ class _RagSearchPageState extends State<RagSearchPage> {
           choices != null && choices.isNotEmpty
               ? (choices.first['message']?['content']?.toString() ?? '')
               : '';
+      // If we have no vector results yet, fetch some to map citations
+      if (_items.isEmpty) {
+        try {
+          final rag = RagService(api);
+          final result = await rag.queryCollection(
+            collectionId: settings.collectionId,
+            query: query,
+            k: 12,
+          );
+          final docs = (result['documents']?[0] as List<dynamic>? ?? []);
+          final metas = (result['metadatas']?[0] as List<dynamic>? ?? []);
+          final dists = (result['distances']?[0] as List<dynamic>? ?? []);
+          final items = <_RagItem>[];
+          for (var i = 0; i < docs.length; i++) {
+            final md =
+                metas.length > i ? metas[i] as Map<String, dynamic>? : null;
+            final dist =
+                dists.length > i ? (dists[i] as num?)?.toDouble() : null;
+            items.add(
+              _RagItem(
+                text: (docs[i] ?? '').toString(),
+                name:
+                    md?['name']?.toString() ??
+                    (md?['source']?.toString() ?? ''),
+                fileId: md?['file_id']?.toString(),
+                score: dist,
+              ),
+            );
+          }
+          _items = items;
+        } catch (_) {}
+      }
+
+      // Parse citations like [1], [2]
+      final answer = content;
+      final matches = RegExp(r"\[(\d+)\]").allMatches(answer);
+      final idxs =
+          matches
+              .map((m) => int.tryParse(m.group(1) ?? '') ?? -1)
+              .where((i) => i > 0)
+              .toSet()
+              .toList()
+            ..sort();
+      final mapped = <_CitationRef>[];
+      for (final i in idxs) {
+        final index = i - 1;
+        if (index >= 0 && index < _items.length) {
+          mapped.add(_CitationRef(index: i, item: _items[index]));
+        }
+      }
+
       setState(() {
         _llm = model;
         _llmAnswer = content;
+        _citations = mapped;
       });
     } catch (e) {
       setState(() => _error = e.toString());
@@ -149,6 +206,49 @@ class _RagSearchPageState extends State<RagSearchPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(_llmAnswer!),
+                      if (_citations.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          'Citations',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        ..._citations.map(
+                          (c) => ListTile(
+                            leading: CircleAvatar(
+                              radius: 12,
+                              child: Text('${c.index}'),
+                            ),
+                            title: Text(
+                              c.item.name.isEmpty ? 'Note' : c.item.name,
+                            ),
+                            subtitle: Text(
+                              c.item.text,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: const Icon(Icons.open_in_new),
+                            onTap:
+                                c.item.fileId == null || c.item.fileId!.isEmpty
+                                    ? null
+                                    : () {
+                                      final np = context.read<NotesProvider>();
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder:
+                                              (_) =>
+                                                  ChangeNotifierProvider.value(
+                                                    value: np,
+                                                    child: NoteEditorPage(
+                                                      noteId: c.item.fileId!,
+                                                    ),
+                                                  ),
+                                        ),
+                                      );
+                                    },
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -229,5 +329,12 @@ class _RagItem {
   final String name;
   final String text;
   final double? score;
-  _RagItem({required this.name, required this.text, this.score});
+  final String? fileId;
+  _RagItem({required this.name, required this.text, this.score, this.fileId});
+}
+
+class _CitationRef {
+  final int index;
+  final _RagItem item;
+  _CitationRef({required this.index, required this.item});
 }
